@@ -64,13 +64,13 @@
         </button>
 
         <!-- Botão Dívidas & Passivos -->
-        <button class="btn-dividas-header" id="btn-header-dividas" title="Gestão de Dívidas e Parcelamentos">
+        <button class="btn-dividas-header" id="btn-header-dividas" onclick="openDividasModal()" title="Gestão de Dívidas e Parcelamentos">
           <span>💳</span>
           <span>Dívidas</span>
         </button>
 
         <!-- Botão Sincronização em Nuvem (Supabase) -->
-        <button class="btn-cloud-sync" id="btn-open-supabase-modal" title="Sincronizar com o Supabase (Online para Você e sua Rodrega)">
+        <button class="btn-cloud-sync" id="btn-open-supabase-modal" onclick="openSupabaseModal()" title="Sincronizar com o Supabase (Online para Você e sua Rodrega)">
           <span class="sync-icon" id="cloud-status-icon">☁️</span>
           <span id="cloud-status-text">Conectar Nuvem</span>
         </button>
@@ -254,10 +254,10 @@
           </div>
         </div>
         <div class="dividas-card-actions">
-          <button class="btn-abater-divida" id="btn-quick-abater-divida" title="Abater ou pagar parcela de dívida">
+          <button class="btn-abater-divida" id="btn-quick-abater-divida" onclick="openDividasModal()" title="Abater ou pagar parcela de dívida">
             - Abater
           </button>
-          <button class="btn-detalhes-divida" id="btn-open-dividas-modal" title="Ver todas as dívidas e parcelamentos">
+          <button class="btn-detalhes-divida" id="btn-open-dividas-modal" onclick="openDividasModal()" title="Ver todas as dívidas e parcelamentos">
             Dívidas
           </button>
         </div>
@@ -437,7 +437,7 @@
         <span>Cofrinho</span>
       </button>
 
-      <button class="dock-btn" id="dock-btn-dividas" title="Área de Dívidas e Passivos">
+      <button class="dock-btn" id="dock-btn-dividas" onclick="openDividasModal()" title="Área de Dívidas e Passivos">
         <span style="font-size: 1.25rem; line-height: 1;">💳</span>
         <span>Dívidas</span>
       </button>
@@ -739,7 +739,7 @@
           <span style="font-size: 1.4rem;">💳</span>
           <h3>Dívidas & Passivos</h3>
         </div>
-        <button class="modal-close-icon" id="btn-close-dividas-modal">✕</button>
+        <button class="modal-close-icon" id="btn-close-dividas-modal" onclick="closeDividasModal()">✕</button>
       </div>
       <div class="modal-body dividas-modal-body">
         <!-- KPIs de Dívidas -->
@@ -771,7 +771,7 @@
             <div class="dab-row">
               <span class="ibi-prefix">R$</span>
               <input type="number" step="0.01" min="0.01" id="input-abatimento-valor" placeholder="0,00" />
-              <button class="btn-divida-pay" id="btn-action-abater-divida">Abater Valor</button>
+              <button class="btn-divida-pay" id="btn-action-abater-divida" onclick="handleAbaterDivida()">Abater Valor</button>
             </div>
           </div>
         </div>
@@ -779,7 +779,7 @@
         <!-- Lista de Dívidas -->
         <div class="dividas-list-header">
           <h4>Minhas Dívidas & Parcelamentos</h4>
-          <button class="btn-inline-add" id="btn-create-divida">+ Nova Dívida</button>
+          <button class="btn-inline-add" id="btn-create-divida" onclick="handleCreateDivida()">+ Nova Dívida</button>
         </div>
 
         <div id="dividas-list-container">
@@ -787,7 +787,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-primary-finavera" id="btn-close-dividas-btn">Fechar</button>
+        <button type="button" class="btn-primary-finavera" id="btn-close-dividas-btn" onclick="closeDividasModal()">Fechar</button>
       </div>
     </div>
   </div>
@@ -899,7 +899,7 @@
           <span style="font-size:1.4rem;">☁️</span>
           <h3>Sincronização em Nuvem</h3>
         </div>
-        <button class="modal-close-icon" id="btn-close-supabase-modal">✕</button>
+        <button class="modal-close-icon" id="btn-close-supabase-modal" onclick="closeSupabaseModal()">✕</button>
       </div>
       <div class="modal-body" style="padding: 1.5rem;">
         <div class="supabase-info-box">
@@ -929,8 +929,8 @@
         </div>
 
         <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
-          <button class="btn-primary-finavera" id="btn-save-supabase">💾 Salvar & Conectar</button>
-          <button class="btn-ghost-sm" id="btn-sync-now">🔄 Buscar da Nuvem</button>
+          <button class="btn-primary-finavera" id="btn-save-supabase" onclick="handleSaveSupabaseConfig()">💾 Salvar & Conectar</button>
+          <button class="btn-ghost-sm" id="btn-sync-now" onclick="handleSyncNow()">🔄 Buscar da Nuvem</button>
         </div>
       </div>
     </div>

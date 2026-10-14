@@ -2336,3 +2336,168 @@ button {
   color: var(--text-main);
 }
 
+/* ==========================================================================
+   Modal Dialogs & Internal Containers
+   ========================================================================== */
+.modal-dividas-dialog {
+  max-width: 600px;
+}
+
+.modal-supabase-dialog {
+  max-width: 540px;
+}
+
+.dividas-modal-body {
+  padding: 1.5rem;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.dividas-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.div-kpi-card {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+.div-kpi-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.div-kpi-card strong {
+  font-size: 1.05rem;
+  font-family: var(--font-display);
+  color: var(--text-main);
+}
+
+.dividas-action-box {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(245, 158, 11, 0.05));
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.dab-header {
+  margin-bottom: 0.75rem;
+}
+
+.dab-header strong {
+  display: block;
+  font-size: 0.88rem;
+  color: var(--text-main);
+}
+
+.dab-header small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.dab-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dab-inputs select {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-size: 0.85rem;
+}
+
+.dab-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dab-row input {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-size: 0.85rem;
+}
+
+.btn-divida-pay {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.btn-divida-pay:hover {
+  opacity: 0.9;
+}
+
+.dividas-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.dividas-list-header h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.btn-inline-add {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-blue);
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-inline-add:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.supabase-info-box {
+  background: rgba(14, 165, 233, 0.08);
+  border: 1px solid rgba(14, 165, 233, 0.22);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.supabase-info-box a {
+  color: #0284c7;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+

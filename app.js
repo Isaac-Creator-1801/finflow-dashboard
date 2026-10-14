@@ -745,11 +745,17 @@ const fmtCurrency = (val) => {
 };
 
 // --- INICIALIZAÇÃO DA APLICAÇÃO ---
-document.addEventListener('DOMContentLoaded', () => {
-  initTheme();
-  setupEventListeners();
-  renderApp();
-});
+function initApp() {
+  try { initTheme(); } catch (e) { console.error('Theme init error:', e); }
+  try { setupEventListeners(); } catch (e) { console.error('EventListeners error:', e); }
+  try { renderApp(); } catch (e) { console.error('RenderApp error:', e); }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
 
 // --- CONTROLE DE TEMA ---
 function initTheme() {
@@ -916,27 +922,21 @@ function setupEventListeners() {
     });
   }
 
-  // Dívidas Modal
-  const openDividasModal = () => {
-    renderDividasModalUI();
-    document.getElementById('modal-dividas').classList.add('open');
-  };
-  const closeDividasModal = () => document.getElementById('modal-dividas').classList.remove('open');
-
+  // Dívidas Modal Listeners
   const btnDividasHeader = document.getElementById('btn-header-dividas');
-  if (btnDividasHeader) btnDividasHeader.addEventListener('click', openDividasModal);
+  if (btnDividasHeader) btnDividasHeader.addEventListener('click', window.openDividasModal);
   const btnOpenDiviCard = document.getElementById('btn-open-dividas-modal');
-  if (btnOpenDiviCard) btnOpenDiviCard.addEventListener('click', openDividasModal);
+  if (btnOpenDiviCard) btnOpenDiviCard.addEventListener('click', window.openDividasModal);
   const btnQuickAbater = document.getElementById('btn-quick-abater-divida');
-  if (btnQuickAbater) btnQuickAbater.addEventListener('click', openDividasModal);
+  if (btnQuickAbater) btnQuickAbater.addEventListener('click', window.openDividasModal);
   const dockBtnDividas = document.getElementById('dock-btn-dividas');
-  if (dockBtnDividas) dockBtnDividas.addEventListener('click', openDividasModal);
+  if (dockBtnDividas) dockBtnDividas.addEventListener('click', window.openDividasModal);
   const btnCloseDividasModal = document.getElementById('btn-close-dividas-modal');
-  if (btnCloseDividasModal) btnCloseDividasModal.addEventListener('click', closeDividasModal);
+  if (btnCloseDividasModal) btnCloseDividasModal.addEventListener('click', window.closeDividasModal);
   const btnCloseDividasBtn = document.getElementById('btn-close-dividas-btn');
-  if (btnCloseDividasBtn) btnCloseDividasBtn.addEventListener('click', closeDividasModal);
+  if (btnCloseDividasBtn) btnCloseDividasBtn.addEventListener('click', window.closeDividasModal);
   const modalDividas = document.getElementById('modal-dividas');
-  if (modalDividas) modalDividas.addEventListener('click', (e) => { if (e.target.id === 'modal-dividas') closeDividasModal(); });
+  if (modalDividas) modalDividas.addEventListener('click', (e) => { if (e.target.id === 'modal-dividas') window.closeDividasModal(); });
 
   const btnAbaterDivida = document.getElementById('btn-action-abater-divida');
   if (btnAbaterDivida) btnAbaterDivida.addEventListener('click', handleAbaterDivida);
@@ -944,19 +944,17 @@ function setupEventListeners() {
   const btnCreateDivida = document.getElementById('btn-create-divida');
   if (btnCreateDivida) btnCreateDivida.addEventListener('click', handleCreateDivida);
 
-  // Supabase Config Modal
+  // Supabase Config Modal Listeners
   const btnOpenSupabase = document.getElementById('btn-open-supabase-modal');
-  if (btnOpenSupabase) btnOpenSupabase.addEventListener('click', openSupabaseModal);
+  if (btnOpenSupabase) btnOpenSupabase.addEventListener('click', window.openSupabaseModal);
   const btnCloseSupabase = document.getElementById('btn-close-supabase-modal');
-  if (btnCloseSupabase) btnCloseSupabase.addEventListener('click', closeSupabaseModal);
+  if (btnCloseSupabase) btnCloseSupabase.addEventListener('click', window.closeSupabaseModal);
   const btnSaveSupabase = document.getElementById('btn-save-supabase');
-  if (btnSaveSupabase) btnSaveSupabase.addEventListener('click', handleSaveSupabaseConfig);
+  if (btnSaveSupabase) btnSaveSupabase.addEventListener('click', window.handleSaveSupabaseConfig);
   const btnSyncNow = document.getElementById('btn-sync-now');
-  if (btnSyncNow) btnSyncNow.addEventListener('click', async () => {
-    const loaded = await state.loadFromSupabase();
-    if (loaded) { renderApp(); showToast('☁️ Dados atualizados da nuvem!'); }
-    else showToast('Nuvem não configurada ou sem dados ainda.');
-  });
+  if (btnSyncNow) btnSyncNow.addEventListener('click', window.handleSyncNow);
+  const modalSupabase = document.getElementById('modal-supabase');
+  if (modalSupabase) modalSupabase.addEventListener('click', (e) => { if (e.target.id === 'modal-supabase') window.closeSupabaseModal(); });
 }
 
 // --- PROFILE SWITCHER ---
@@ -1846,6 +1844,9 @@ function showToast(message) {
 // --- DÍVIDAS & PASSIVOS ---
 // =============================================================
 function renderDividasModalUI() {
+  if (!Array.isArray(state.dividas)) {
+    state.dividas = [];
+  }
   const totalRestante = state.getTotalDividas();
   const totalPago = state.getTotalPaidDividas();
   const totalGeral = totalRestante + totalPago;
@@ -1862,7 +1863,7 @@ function renderDividasModalUI() {
   if (selectDiv) {
     selectDiv.innerHTML = '<option value="">Selecione a dívida...</option>' +
       (state.dividas || []).map(d => {
-        const saldo = Math.max(0, d.total - (d.paid || 0));
+        const saldo = Math.max(0, (d.total || 0) - (d.paid || 0));
         return `<option value="${d.id}">${d.icon || '💳'} ${d.name} — saldo: ${fmtCurrency(saldo)}</option>`;
       }).join('');
   }
@@ -1872,7 +1873,7 @@ function renderDividasModalUI() {
   if (!container) return;
 
   if (!state.dividas || state.dividas.length === 0) {
-    container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1.5rem 0;">Nenhuma dívida cadastrada. Adicione abaixo!</p>';
+    container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1.5rem 0;">Nenhuma dívida cadastrada. Clique em "+ Nova Dívida" acima para começar!</p>';
     return;
   }
 
@@ -1915,6 +1916,21 @@ function renderDividasModalUI() {
   updateDividasKPI();
 }
 
+window.openDividasModal = function() {
+  try {
+    renderDividasModalUI();
+  } catch (err) {
+    console.error('Error rendering dividas modal:', err);
+  }
+  const modal = document.getElementById('modal-dividas');
+  if (modal) modal.classList.add('open');
+};
+
+window.closeDividasModal = function() {
+  const modal = document.getElementById('modal-dividas');
+  if (modal) modal.classList.remove('open');
+};
+
 function updateDividasKPI() {
   const totalRestante = state.getTotalDividas();
   const totalPago = state.getTotalPaidDividas();
@@ -1930,7 +1946,7 @@ function updateDividasKPI() {
   }
 }
 
-function handleAbaterDivida() {
+window.handleAbaterDivida = function() {
   const selectEl = document.getElementById('select-divida-abater');
   const inputEl = document.getElementById('input-abatimento-valor');
   if (!selectEl || !inputEl) return;
@@ -1949,9 +1965,10 @@ function handleAbaterDivida() {
     const saldo = Math.max(0, updated.total - updated.paid);
     showToast(saldo <= 0 ? `🎉 Parabéns! "${updated.name}" foi quitada!` : `✅ R$ ${amount.toFixed(2)} abatido de "${updated.name}"!`);
   }
-}
+};
+function handleAbaterDivida() { window.handleAbaterDivida(); }
 
-function handleCreateDivida() {
+window.handleCreateDivida = function() {
   const name = prompt('Nome da dívida (Ex: Financiamento do Carro, Cartão Nubank, Empréstimo):');
   if (!name) return;
   const icon = prompt('Ícone/Emoji:', '💳');
@@ -1965,7 +1982,8 @@ function handleCreateDivida() {
   renderDividasModalUI();
   renderApp();
   showToast(`✅ Dívida "${name}" cadastrada!`);
-}
+};
+function handleCreateDivida() { window.handleCreateDivida(); }
 
 window.openEditDividaPrompt = function(id) {
   const d = (state.dividas || []).find(d => d.id === id);
@@ -2013,30 +2031,50 @@ function setSyncStatus(status) {
 // =============================================================
 // --- SUPABASE MODAL ---
 // =============================================================
-function openSupabaseModal() {
-  // Pre-fill existing config
+window.openSupabaseModal = function() {
   const urlEl = document.getElementById('input-supabase-url');
   const keyEl = document.getElementById('input-supabase-key');
   const uidEl = document.getElementById('input-supabase-uid');
   if (urlEl) urlEl.value = state.supabaseUrl || '';
   if (keyEl) keyEl.value = state.supabaseKey || '';
   if (uidEl) uidEl.value = state.supabaseUserId || 'shared';
-  document.getElementById('modal-supabase').classList.add('open');
-}
+  const modal = document.getElementById('modal-supabase');
+  if (modal) modal.classList.add('open');
+};
+function openSupabaseModal() { window.openSupabaseModal(); }
 
-function closeSupabaseModal() {
-  document.getElementById('modal-supabase').classList.remove('open');
-}
+window.closeSupabaseModal = function() {
+  const modal = document.getElementById('modal-supabase');
+  if (modal) modal.classList.remove('open');
+};
+function closeSupabaseModal() { window.closeSupabaseModal(); }
 
-async function handleSaveSupabaseConfig() {
+window.handleSaveSupabaseConfig = async function() {
   const url = (document.getElementById('input-supabase-url')?.value || '').trim();
   const key = (document.getElementById('input-supabase-key')?.value || '').trim();
   const uid = (document.getElementById('input-supabase-uid')?.value || 'shared').trim();
   if (!url || !key) { showToast('Preencha URL e API Key do Supabase.'); return; }
   state.setSupabaseConfig(url, key, uid);
-  closeSupabaseModal();
-  showToast('☁️ Config salva! Sincronizando...');
+  window.closeSupabaseModal();
+  showToast('☁️ Config salva! Sincronizando com a nuvem...');
   const loaded = await state.loadFromSupabase();
-  if (loaded) { renderApp(); showToast('☁️ Dados carregados da nuvem com sucesso!'); }
-  else { state.syncToSupabase(); showToast('☁️ Nuvem configurada! Enviando seus dados...'); }
-}
+  if (loaded) {
+    renderApp();
+    showToast('☁️ Dados carregados da nuvem com sucesso!');
+  } else {
+    state.syncToSupabase();
+    showToast('☁️ Nuvem configurada! Enviando seus dados...');
+  }
+};
+function handleSaveSupabaseConfig() { window.handleSaveSupabaseConfig(); }
+
+window.handleSyncNow = async function() {
+  showToast('🔄 Buscando dados da nuvem...');
+  const loaded = await state.loadFromSupabase();
+  if (loaded) {
+    renderApp();
+    showToast('☁️ Dados atualizados da nuvem com sucesso!');
+  } else {
+    showToast('Nuvem não configurada ou sem dados ainda.');
+  }
+};
