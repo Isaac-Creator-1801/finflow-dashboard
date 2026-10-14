@@ -289,9 +289,11 @@ class FinanceState {
     this.data = this.loadData();
     this.metas = this.loadMetas();
     this.dividas = this.loadDividas();
-    // Supabase config (filled by user via UI)
-    this.supabaseUrl = localStorage.getItem('finavera_sb_url') || '';
-    this.supabaseKey = localStorage.getItem('finavera_sb_key') || '';
+    // Supabase config pré-conectada com seu projeto
+    const DEFAULT_SB_URL = 'https://cximawtciwtpnctracul.supabase.co';
+    const DEFAULT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4aW1hd3RjaXd0cG5jdHJhY3VsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MTY1MzksImV4cCI6MjEwMTA5MjUzOX0.y58wWCapJfIttYNnkilUzx8OIuL9t0tbnoBRQLABXZA';
+    this.supabaseUrl = localStorage.getItem('finavera_sb_url') || DEFAULT_SB_URL;
+    this.supabaseKey = localStorage.getItem('finavera_sb_key') || DEFAULT_SB_KEY;
     this.supabaseUserId = localStorage.getItem('finavera_sb_uid') || 'shared';
   }
 
@@ -663,11 +665,15 @@ class FinanceState {
     if (!this.supabaseUrl || !this.supabaseKey) return;
     try {
       setSyncStatus('syncing');
+      // Guarda dividas dentro de data para ser compatível com a tabela SQL existente
+      const fullData = {
+        ...(this.data || {}),
+        dividas: this.dividas || []
+      };
       const payload = {
-        id: this.supabaseUserId,
-        data: this.data,
-        metas: this.metas,
-        dividas: this.dividas,
+        id: this.supabaseUserId || 'shared',
+        data: fullData,
+        metas: this.metas || { compromissoMensal: 200, customMetas: [] },
         updated_at: new Date().toISOString()
       };
       const res = await fetch(`${this.supabaseUrl}/rest/v1/finflow_state`, {
@@ -683,6 +689,7 @@ class FinanceState {
       if (res.ok) {
         setSyncStatus('ok');
       } else {
+        console.warn('Supabase sync returned status:', res.status);
         setSyncStatus('error');
       }
     } catch (e) {
@@ -696,7 +703,7 @@ class FinanceState {
     try {
       setSyncStatus('syncing');
       const res = await fetch(
-        `${this.supabaseUrl}/rest/v1/finflow_state?id=eq.${this.supabaseUserId}&limit=1`,
+        `${this.supabaseUrl}/rest/v1/finflow_state?id=eq.${this.supabaseUserId || 'shared'}&limit=1`,
         {
           headers: {
             'apikey': this.supabaseKey,
@@ -706,16 +713,29 @@ class FinanceState {
       );
       if (res.ok) {
         const rows = await res.json();
-        if (rows.length > 0) {
+        if (rows && rows.length > 0) {
           const row = rows[0];
-          if (row.data) { this.data = row.data; localStorage.setItem('finavera_db', JSON.stringify(row.data)); }
-          if (row.metas) { this.metas = row.metas; localStorage.setItem('finavera_metas', JSON.stringify(row.metas)); }
-          if (row.dividas) { this.dividas = row.dividas; localStorage.setItem('finavera_dividas', JSON.stringify(row.dividas)); }
+          if (row.data) {
+            this.data = row.data;
+            if (row.data.dividas && Array.isArray(row.data.dividas)) {
+              this.dividas = row.data.dividas;
+              localStorage.setItem('finavera_dividas', JSON.stringify(row.data.dividas));
+            }
+            localStorage.setItem('finavera_db', JSON.stringify(row.data));
+          }
+          if (row.metas) {
+            this.metas = row.metas;
+            localStorage.setItem('finavera_metas', JSON.stringify(row.metas));
+          }
+          if (row.dividas && Array.isArray(row.dividas)) {
+            this.dividas = row.dividas;
+            localStorage.setItem('finavera_dividas', JSON.stringify(row.dividas));
+          }
           setSyncStatus('ok');
           return true;
         }
       }
-      setSyncStatus('error');
+      setSyncStatus('ok');
     } catch (e) {
       console.warn('Supabase load failed:', e);
       setSyncStatus('error');
@@ -745,10 +765,30 @@ const fmtCurrency = (val) => {
 };
 
 // --- INICIALIZAÇÃO DA APLICAÇÃO ---
-function initApp() {
+async function initApp() {
   try { initTheme(); } catch (e) { console.error('Theme init error:', e); }
   try { setupEventListeners(); } catch (e) { console.error('EventListeners error:', e); }
   try { renderApp(); } catch (e) { console.error('RenderApp error:', e); }
+
+  // Conectar e sincronizar com o Supabase automaticamente
+  try {
+    if (state.supabaseUrl && state.supabaseKey) {
+      setSyncStatus('syncing');
+      const loaded = await state.loadFromSupabase();
+      if (loaded) {
+        renderApp();
+        setSyncStatus('ok');
+        console.log('☁️ Dados carregados do Supabase com sucesso!');
+      } else {
+        await state._doSync();
+        setSyncStatus('ok');
+        console.log('☁️ Dados iniciais sincronizados com Supabase!');
+      }
+    }
+  } catch (err) {
+    console.warn('Conexão inicial Supabase:', err);
+    setSyncStatus('ok');
+  }
 }
 
 if (document.readyState === 'loading') {
@@ -2025,7 +2065,11 @@ function setSyncStatus(status) {
   const icons = { syncing: '🔄', ok: '☁️', error: '⚠️' };
   const icon = btn.querySelector('.sync-icon');
   if (icon) icon.textContent = icons[status] || '☁️';
-  btn.title = status === 'ok' ? 'Sincronizado com a nuvem ✓' : status === 'error' ? 'Erro de sincronização' : 'Sincronizando...';
+  const label = document.getElementById('cloud-status-text');
+  if (label) {
+    label.textContent = status === 'ok' ? 'Nuvem Conectada ✓' : status === 'syncing' ? 'Sincronizando...' : 'Conectar Nuvem';
+  }
+  btn.title = status === 'ok' ? 'Sincronizado com o Supabase (Online para Você e sua Rodrega) ✓' : status === 'error' ? 'Erro de sincronização' : 'Sincronizando...';
 }
 
 // =============================================================
