@@ -560,6 +560,16 @@ class FinanceState {
     return null;
   }
 
+  updateItemValor(catId, itemId, newValor) {
+    const found = this.findItemAndCategory(catId, itemId);
+    if (found) {
+      found.item.valor = newValor;
+      found.item.realizado = newValor;
+      found.item.orcado = newValor;
+      this.saveData(this.data);
+    }
+  }
+
   updateItemOrcado(catId, itemId, newOrcado) {
     const found = this.findItemAndCategory(catId, itemId);
     if (found) {
@@ -1197,8 +1207,7 @@ function renderCategoryCardHtml(cat) {
 
       <div class="accordion-body" id="body-${cat.id}">
         <div class="items-table-header">
-          <span class="th-orcado">Orçado</span>
-          <span class="th-realizado">Realizado</span>
+          <span class="th-valor">Valor</span>
         </div>
 
         <div class="category-items-list">
@@ -1213,17 +1222,10 @@ function renderCategoryCardHtml(cat) {
               <div class="item-row-right">
                 <input type="number" 
                        step="0.01" 
-                       class="inline-orcado-input" 
-                       value="${(item.orcado || 0).toFixed(2)}" 
-                       onchange="handleInlineOrcadoChange('${cat.id}', '${item.id}', this.value)" 
-                       title="Clique para editar o valor orçado (Planejado)" />
-
-                <input type="number" 
-                       step="0.01" 
-                       class="inline-realizado-input ${isSaida ? 'input-realizado-saida' : 'input-realizado-entrada'}" 
-                       value="${(item.realizado || 0).toFixed(2)}" 
-                       onchange="handleInlineRealizadoChange('${cat.id}', '${item.id}', this.value)" 
-                       title="Clique para editar o valor realizado (Gasto real / Entrada real)" />
+                       class="inline-valor-input ${isSaida ? 'input-realizado-saida' : 'input-realizado-entrada'}" 
+                       value="${((item.realizado !== undefined && item.realizado !== null ? item.realizado : item.orcado) || 0).toFixed(2)}" 
+                       onchange="handleInlineValorChange('${cat.id}', '${item.id}', this.value)" 
+                       title="Clique para editar o valor" />
 
                 <button class="btn-delete-item" onclick="handleDeleteItem('${cat.id}', '${item.id}')" title="Excluir item">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1271,16 +1273,23 @@ window.updateCategoryBadge = function(catId) {
   }
 };
 
+window.handleInlineValorChange = function(catId, itemId, val) {
+  const newNum = parseFloat(val) || 0;
+  state.updateItemValor(catId, itemId, newNum);
+  updateCategoryBadge(catId);
+  updateDashboardMetrics();
+};
+
 window.handleInlineOrcadoChange = function(catId, itemId, val) {
   const newNum = parseFloat(val) || 0;
-  state.updateItemOrcado(catId, itemId, newNum);
+  state.updateItemValor(catId, itemId, newNum);
   updateCategoryBadge(catId);
   updateDashboardMetrics();
 };
 
 window.handleInlineRealizadoChange = function(catId, itemId, val) {
   const newNum = parseFloat(val) || 0;
-  state.updateItemRealizado(catId, itemId, newNum);
+  state.updateItemValor(catId, itemId, newNum);
   updateCategoryBadge(catId);
   updateDashboardMetrics();
 };
@@ -1692,8 +1701,8 @@ function handleItemFormSubmit(e) {
   const profile = document.getElementById('form-item-profile').value;
   const catId = document.getElementById('form-item-cat').value;
   const name = document.getElementById('form-item-name').value.trim();
-  const orcado = parseFloat(document.getElementById('form-item-orcado').value) || 0;
-  const realizado = parseFloat(document.getElementById('form-item-realizado').value) || 0;
+  const valorInput = document.getElementById('form-item-valor');
+  const valor = valorInput ? (parseFloat(valorInput.value) || 0) : ((parseFloat(document.getElementById('form-item-realizado')?.value) || parseFloat(document.getElementById('form-item-orcado')?.value)) || 0);
   const isShared = document.getElementById('form-item-is-shared').checked;
 
   if (!name) {
@@ -1707,8 +1716,9 @@ function handleItemFormSubmit(e) {
     cat.items.push({
       id: 'item-' + Date.now(),
       name,
-      orcado,
-      realizado,
+      valor,
+      orcado: valor,
+      realizado: valor,
       isShared
     });
     state.saveData(state.data);

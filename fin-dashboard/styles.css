@@ -874,7 +874,7 @@ button {
   display: block;
 }
 
-/* Table Header Labels Inside Category: Orçado | Realizado */
+/* Table Header Labels Inside Category: Valor */
 .items-table-header {
   display: flex;
   align-items: center;
@@ -887,6 +887,7 @@ button {
   text-transform: uppercase;
 }
 
+.th-valor { width: 110px; text-align: right; padding-right: 1.8rem; letter-spacing: 0.04em; }
 .th-orcado { width: 90px; text-align: right; }
 .th-realizado { width: 90px; text-align: right; }
 
@@ -965,6 +966,34 @@ button {
 .inline-orcado-input:focus {
   border-color: var(--color-blue);
   background: var(--bg-surface);
+}
+
+.inline-valor-input {
+  width: 105px;
+  text-align: right;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xs);
+  padding: 0.35rem 0.55rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-main);
+  outline: none;
+  transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.inline-valor-input:focus {
+  border-color: var(--color-blue);
+  background: var(--bg-surface);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.inline-valor-input.input-realizado-saida {
+  color: #ef4444;
+}
+
+.inline-valor-input.input-realizado-entrada {
+  color: #10b981;
 }
 
 .inline-realizado-input {

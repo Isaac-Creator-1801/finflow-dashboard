@@ -612,15 +612,9 @@
             <input type="text" id="form-item-name" placeholder="Ex: Condomínio, Combustível, Tráfego Meta, Salário..." required />
           </div>
 
-          <div class="form-row">
-            <div class="form-field">
-              <label for="form-item-orcado">Valor Orçado (Planejado) R$</label>
-              <input type="number" step="0.01" min="0" id="form-item-orcado" placeholder="0,00" />
-            </div>
-            <div class="form-field">
-              <label for="form-item-realizado">Valor Realizado (Gasto Real) R$ *</label>
-              <input type="number" step="0.01" min="0" id="form-item-realizado" placeholder="0,00" required />
-            </div>
+          <div class="form-field full-width">
+            <label for="form-item-valor">Valor (R$) *</label>
+            <input type="number" step="0.01" min="0" id="form-item-valor" placeholder="0,00" required />
           </div>
 
           <!-- Couple Expense Split Toggle -->
