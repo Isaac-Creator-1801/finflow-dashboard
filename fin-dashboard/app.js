@@ -454,15 +454,38 @@ class FinanceState {
   }
 
   // --- MÉTODOS DE CATEGORIAS E ITENS ---
-  updateItemOrcado(catId, itemId, newOrcado) {
-    const cats = this.getCategoriesForProfile(this.activeProfile);
-    const cat = cats.find(c => c.id === catId);
-    if (cat) {
-      const item = cat.items.find(i => i.id === itemId);
-      if (item) {
-        item.orcado = newOrcado;
-        this.saveData(this.data);
+  findItemAndCategory(catId, itemId) {
+    for (const key of ['categories_me', 'categories_girlfriend', 'categories_business']) {
+      const cat = (this.data[key] || []).find(c => c.id === catId);
+      if (cat) {
+        const item = cat.items.find(i => i.id === itemId);
+        if (item) return { cat, item, key };
       }
+    }
+    return null;
+  }
+
+  updateItemOrcado(catId, itemId, newOrcado) {
+    const found = this.findItemAndCategory(catId, itemId);
+    if (found) {
+      found.item.orcado = newOrcado;
+      this.saveData(this.data);
+    }
+  }
+
+  updateItemRealizado(catId, itemId, newRealizado) {
+    const found = this.findItemAndCategory(catId, itemId);
+    if (found) {
+      found.item.realizado = newRealizado;
+      this.saveData(this.data);
+    }
+  }
+
+  updateItemName(catId, itemId, newName) {
+    const found = this.findItemAndCategory(catId, itemId);
+    if (found) {
+      found.item.name = newName;
+      this.saveData(this.data);
     }
   }
 
@@ -917,7 +940,7 @@ function renderCategoryCardHtml(cat) {
             <div class="item-row" id="row-${item.id}">
               <div class="item-row-left">
                 <span class="item-drag-icon">::</span>
-                <span class="item-title-text" title="${item.name}">${item.name}</span>
+                <span class="item-title-text" onclick="handleRenameItem('${cat.id}', '${item.id}')" title="Clique para renomear este item">${item.name}</span>
                 ${item.isShared ? '<span class="item-tag-shared">Casal 50%</span>' : ''}
               </div>
 
@@ -927,11 +950,14 @@ function renderCategoryCardHtml(cat) {
                        class="inline-orcado-input" 
                        value="${(item.orcado || 0).toFixed(2)}" 
                        onchange="handleInlineOrcadoChange('${cat.id}', '${item.id}', this.value)" 
-                       title="Clique para editar o valor orçado" />
+                       title="Clique para editar o valor orçado (Planejado)" />
 
-                <span class="item-realizado-val ${isSaida ? 'value-red' : ''}">
-                  ${fmtCurrency(item.realizado)}
-                </span>
+                <input type="number" 
+                       step="0.01" 
+                       class="inline-realizado-input ${isSaida ? 'input-realizado-saida' : 'input-realizado-entrada'}" 
+                       value="${(item.realizado || 0).toFixed(2)}" 
+                       onchange="handleInlineRealizadoChange('${cat.id}', '${item.id}', this.value)" 
+                       title="Clique para editar o valor realizado (Gasto real / Entrada real)" />
 
                 <button class="btn-delete-item" onclick="handleDeleteItem('${cat.id}', '${item.id}')" title="Excluir item">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -973,6 +999,24 @@ window.handleInlineOrcadoChange = function(catId, itemId, val) {
   state.updateItemOrcado(catId, itemId, newNum);
   renderApp();
   showToast('Orçado atualizado!');
+};
+
+window.handleInlineRealizadoChange = function(catId, itemId, val) {
+  const newNum = parseFloat(val) || 0;
+  state.updateItemRealizado(catId, itemId, newNum);
+  renderApp();
+  showToast('Realizado atualizado!');
+};
+
+window.handleRenameItem = function(catId, itemId) {
+  const found = state.findItemAndCategory(catId, itemId);
+  if (!found) return;
+  const newName = prompt('Novo nome para este item:', found.item.name);
+  if (newName && newName.trim()) {
+    state.updateItemName(catId, itemId, newName.trim());
+    renderApp();
+    showToast('Item renomeado!');
+  }
 };
 
 window.handleDeleteItem = function(catId, itemId) {
