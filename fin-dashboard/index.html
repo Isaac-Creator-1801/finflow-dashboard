@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Painel Financeiro | Gestão Pessoal, Namorada e PJ</title>
+  <title>Painel Financeiro | Gestão de Finanças Rodrego, Rodrega e PJ</title>
   <meta name="description" content="Dashboard financeiro inteligente inspirado no Finavera, com controle de orçamento orçado vs realizado, metas e multi-perfil (Pessoal, Casal e PJ)." />
 
   <!-- Google Fonts: Inter & Outfit -->
@@ -39,11 +39,11 @@
       <div class="profile-nav-pills" id="profile-pill-selector">
         <button class="profile-pill active" data-profile="me" id="pill-me">
           <span class="pill-dot dot-me"></span>
-          <span>Meu Pessoal</span>
+          <span>Rodrego</span>
         </button>
         <button class="profile-pill" data-profile="girlfriend" id="pill-girlfriend">
           <span class="pill-dot dot-gf"></span>
-          <span>Namorada</span>
+          <span>Rodrega</span>
         </button>
         <button class="profile-pill" data-profile="business" id="pill-business">
           <span class="pill-dot dot-biz"></span>
@@ -63,11 +63,23 @@
           <span>Cofrinho</span>
         </button>
 
+        <!-- Botão Dívidas & Passivos -->
+        <button class="btn-dividas-header" id="btn-header-dividas" title="Gestão de Dívidas e Parcelamentos">
+          <span>💳</span>
+          <span>Dívidas</span>
+        </button>
+
+        <!-- Botão Sincronização em Nuvem (Supabase) -->
+        <button class="btn-cloud-sync" id="btn-open-supabase-modal" title="Sincronizar com o Supabase (Online para Você e sua Rodrega)">
+          <span class="sync-icon" id="cloud-status-icon">☁️</span>
+          <span id="cloud-status-text">Conectar Nuvem</span>
+        </button>
+
         <button class="btn-personalizar" id="btn-open-metas-modal" title="Personalizar metas e compromisso mensal">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/>
           </svg>
-          <span>Personalizar</span>
+          <span>Metas</span>
         </button>
 
         <button class="btn-ghost-icon" id="btn-toggle-theme" title="Alternar Modo Escuro / Claro">
@@ -229,6 +241,28 @@
         </div>
       </div>
 
+      <!-- Card de Dívidas & Passivos (Ao lado do Cofrinho) -->
+      <div class="card-kpi card-dividas" id="card-dividas-widget">
+        <div class="dividas-card-left">
+          <div class="dividas-circle-icon">
+            <span class="div-icon">💳</span>
+          </div>
+          <div class="dividas-info">
+            <span class="kpi-label">Dívidas & Passivos</span>
+            <div class="kpi-big-value value-red" id="kpi-dividas-total">R$ 0,00</div>
+            <small class="dividas-sub" id="kpi-dividas-paid-sub">Pago: R$ 0,00 (0%)</small>
+          </div>
+        </div>
+        <div class="dividas-card-actions">
+          <button class="btn-abater-divida" id="btn-quick-abater-divida" title="Abater ou pagar parcela de dívida">
+            - Abater
+          </button>
+          <button class="btn-detalhes-divida" id="btn-open-dividas-modal" title="Ver todas as dívidas e parcelamentos">
+            Dívidas
+          </button>
+        </div>
+      </div>
+
       <!-- Orçamento Utilizado Card (With Semicircle Gauge) -->
       <div class="card-kpi card-gauge">
         <div class="gauge-left">
@@ -264,7 +298,7 @@
       <div class="cons-col col-me">
         <div class="cons-head">
           <span class="dot-indicator dot-me"></span>
-          <h4>Meu Pessoal</h4>
+          <h4>Rodrego</h4>
         </div>
         <div class="cons-data">
           <span>Receitas: <strong id="c-me-inc">R$ 0,00</strong></span>
@@ -276,7 +310,7 @@
       <div class="cons-col col-gf">
         <div class="cons-head">
           <span class="dot-indicator dot-gf"></span>
-          <h4>Namorada</h4>
+          <h4>Rodrega</h4>
         </div>
         <div class="cons-data">
           <span>Receitas: <strong id="c-gf-inc">R$ 0,00</strong></span>
@@ -307,7 +341,7 @@
 
       <div class="profile-current-indicator">
         <span class="pci-dot" id="pci-dot"></span>
-        <span class="pci-text" id="pci-label">Visualizando: Meu Pessoal</span>
+        <span class="pci-text" id="pci-label">Visualizando: Rodrego</span>
       </div>
     </div>
 
@@ -403,6 +437,11 @@
         <span>Cofrinho</span>
       </button>
 
+      <button class="dock-btn" id="dock-btn-dividas" title="Área de Dívidas e Passivos">
+        <span style="font-size: 1.25rem; line-height: 1;">💳</span>
+        <span>Dívidas</span>
+      </button>
+
       <!-- Center Elevated '+ Novo' Button -->
       <button class="dock-center-add-btn" id="dock-btn-novo" title="Adicionar Novo Lançamento">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -462,74 +501,24 @@
               <span class="mcm-val" id="meta-compromisso-display">R$ 200,00</span>
               <span class="mcm-sub">por mês</span>
             </div>
-            <button class="btn-meta-edit" onclick="editMetaCompromisso()" title="Editar valor">
+            <button class="btn-meta-edit" onclick="editMetaCompromisso()" title="Editar compromisso mensal">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
             </button>
           </div>
         </div>
 
-        <!-- Section 2: Reserva de Emergência -->
-        <div class="meta-section">
-          <div class="meta-section-header">
-            <div class="msh-left">
-              <span class="msh-icon">🛡️</span>
-              <span>Reserva de Emergência</span>
-            </div>
-            <button class="btn-calcular-simple" id="btn-calc-reserva">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="2" width="16" height="20" rx="2"/></svg>
-              Calcular
-            </button>
-          </div>
-          <div class="meta-item-card">
-            <div class="mic-left">
-              <span class="mic-icon-pig">🐖</span>
-              <div class="mic-info">
-                <strong>Reserva de Emergência</strong>
-                <span id="meta-reserva-display">R$ 25.000,00</span>
-              </div>
-            </div>
-            <div class="mic-actions">
-              <button class="btn-icon-soft" title="Ocultar/Exibir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-              <button class="btn-icon-soft" onclick="editMetaGoal('reserva')" title="Editar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Section 3: Liberdade Financeira -->
-        <div class="meta-section">
-          <div class="meta-section-header">
-            <div class="msh-left">
-              <span class="msh-icon">✨</span>
-              <span>Liberdade Financeira</span>
-            </div>
-          </div>
-          <div class="meta-item-card">
-            <div class="mic-left">
-              <span class="mic-icon-pig">🐖</span>
-              <div class="mic-info">
-                <strong>Liberdade Financeira</strong>
-                <span id="meta-liberdade-display">R$ 800.000,00</span>
-              </div>
-            </div>
-            <div class="mic-actions">
-              <button class="btn-icon-soft" title="Ocultar/Exibir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-              <button class="btn-icon-soft" onclick="editMetaGoal('liberdade')" title="Editar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Section 4: Outras Metas -->
+        <!-- Section 2: Minhas Metas Financeiras (100% Personalizadas) -->
         <div class="meta-section">
           <div class="meta-section-header">
             <div class="msh-left">
               <span class="msh-icon">🎯</span>
-              <span>Outras Metas</span>
+              <span>Minhas Metas Financeiras (Personalizadas)</span>
             </div>
-            <button class="btn-inline-add" id="btn-add-other-meta">+ Nova Meta</button>
+            <button class="btn-inline-add" id="btn-add-custom-meta">+ Nova Meta</button>
           </div>
           
-          <div class="other-metas-list" id="other-metas-container">
-            <!-- Dynamically loaded -->
+          <div class="custom-metas-list" id="custom-metas-container">
+            <!-- Dynamically loaded with full edit and delete support -->
           </div>
         </div>
 
@@ -570,8 +559,8 @@
             <div class="form-field">
               <label for="form-item-profile">Perfil *</label>
               <select id="form-item-profile" required>
-                <option value="me">Meu Pessoal</option>
-                <option value="girlfriend">Namorada</option>
+                <option value="me">Rodrego</option>
+                <option value="girlfriend">Rodrega</option>
                 <option value="business">Empresa (PJ)</option>
               </select>
             </div>
@@ -639,8 +628,8 @@
           <div class="form-field full-width">
             <label>Perfil</label>
             <select id="new-cat-profile">
-              <option value="me">Meu Pessoal</option>
-              <option value="girlfriend">Namorada</option>
+              <option value="me">Rodrego</option>
+              <option value="girlfriend">Rodrega</option>
               <option value="business">Empresa (PJ)</option>
             </select>
           </div>
@@ -698,7 +687,7 @@
           <div class="chc-left">
             <span class="chc-sub">Total Acumulado no Porquinho</span>
             <div class="chc-amount" id="modal-cofrinho-total">R$ 0,00</div>
-            <span class="chc-badge" id="modal-cofrinho-profile-label">Perfil Ativo: Meu Pessoal</span>
+            <span class="chc-badge" id="modal-cofrinho-profile-label">Perfil Ativo: Rodrego</span>
           </div>
           <div class="chc-pig-illustration">
             <span>🐖</span>
@@ -741,6 +730,70 @@
   </div>
 
   <!-- ==========================================================================
+       MODAL: Gestão de Dívidas & Passivos
+       ========================================================================== -->
+  <div class="modal-backdrop" id="modal-dividas" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dividas-dialog">
+      <div class="modal-header">
+        <div class="modal-header-title">
+          <span style="font-size: 1.4rem;">💳</span>
+          <h3>Dívidas & Passivos</h3>
+        </div>
+        <button class="modal-close-icon" id="btn-close-dividas-modal">✕</button>
+      </div>
+      <div class="modal-body dividas-modal-body">
+        <!-- KPIs de Dívidas -->
+        <div class="dividas-kpi-row">
+          <div class="div-kpi-card">
+            <span class="div-kpi-label">Saldo Devedor</span>
+            <strong id="div-total-restante">R$ 0,00</strong>
+          </div>
+          <div class="div-kpi-card">
+            <span class="div-kpi-label">Total Pago</span>
+            <strong id="div-total-pago">R$ 0,00</strong>
+          </div>
+          <div class="div-kpi-card">
+            <span class="div-kpi-label">Mensalidade Total</span>
+            <strong id="div-mensalidade-total">R$ 0,00</strong>
+          </div>
+        </div>
+
+        <!-- Formulário Rápido para Abater / Amortizar -->
+        <div class="dividas-action-box">
+          <div class="dab-header">
+            <strong>⬇️ Abater Parcela ou Pagamento</strong>
+            <small>Selecione a dívida e o valor para amortizar</small>
+          </div>
+          <div class="dab-inputs">
+            <select id="select-divida-abater">
+              <!-- Populated dynamically -->
+            </select>
+            <div class="dab-row">
+              <span class="ibi-prefix">R$</span>
+              <input type="number" step="0.01" min="0.01" id="input-abatimento-valor" placeholder="0,00" />
+              <button class="btn-divida-pay" id="btn-action-abater-divida">Abater Valor</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lista de Dívidas -->
+        <div class="dividas-list-header">
+          <h4>Minhas Dívidas & Parcelamentos</h4>
+          <button class="btn-inline-add" id="btn-create-divida">+ Nova Dívida</button>
+        </div>
+
+        <div id="dividas-list-container">
+          <!-- Populated dynamically via app.js -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary-finavera" id="btn-close-dividas-btn">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==========================================================================
        MODAL 4: Acerto de Contas do Casal
        ========================================================================== -->
   <div class="modal-backdrop" id="modal-couple" role="dialog" aria-modal="true">
@@ -763,7 +816,7 @@
             <span id="couple-paid-me" class="color-blue">R$ 0,00</span>
           </div>
           <div class="csc-row">
-            <span>Pago pela Namorada:</span>
+            <span>Pago pela Rodrega:</span>
             <span id="couple-paid-gf" class="color-pink">R$ 0,00</span>
           </div>
           <hr class="csc-divider" />
@@ -836,7 +889,57 @@
     </div>
   </div>
 
+  <!-- ==========================================================================
+       MODAL: Configurar Sincronização com Supabase (Nuvem)
+       ========================================================================== -->
+  <div class="modal-backdrop" id="modal-supabase" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-supabase-dialog">
+      <div class="modal-header">
+        <div class="modal-header-title">
+          <span style="font-size:1.4rem;">☁️</span>
+          <h3>Sincronização em Nuvem</h3>
+        </div>
+        <button class="modal-close-icon" id="btn-close-supabase-modal">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.5rem;">
+        <div class="supabase-info-box">
+          <p>📌 <strong>Como funciona:</strong> configure um banco <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> gratuito e os dados serão salvos automaticamente na nuvem. Você e a Rodrega acessam e editam tudo em tempo real de qualquer dispositivo!</p>
+        </div>
+
+        <div class="form-row" style="margin-top: 1rem;">
+          <label class="form-label">URL do Projeto Supabase</label>
+          <input type="url" id="input-supabase-url" class="form-input" placeholder="https://xxxxxxxxxxxx.supabase.co" autocomplete="off" />
+        </div>
+        <div class="form-row" style="margin-top: 0.8rem;">
+          <label class="form-label">API Key (anon public)</label>
+          <input type="password" id="input-supabase-key" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocomplete="off" />
+        </div>
+        <div class="form-row" style="margin-top: 0.8rem;">
+          <label class="form-label">ID da Sessão Compartilhada</label>
+          <input type="text" id="input-supabase-uid" class="form-input" placeholder="shared (padrão — mesmo ID para vocês dois)" autocomplete="off" />
+          <small style="color: var(--text-muted); font-size: 0.78rem; margin-top: 0.25rem; display: block;">Use o mesmo ID nos dois dispositivos para compartilhar os dados.</small>
+        </div>
+
+        <div style="margin-top: 1.2rem; background: var(--bg-card); border-radius: 8px; padding: 1rem; font-size: 0.82rem; color: var(--text-muted);">
+          <strong>📋 Passo a passo Supabase:</strong><br/>
+          1. Acesse <a href="https://supabase.com" target="_blank">supabase.com</a> e crie uma conta grátis<br/>
+          2. Crie um novo projeto<br/>
+          3. No SQL Editor, execute: <code>CREATE TABLE finflow_state (id text PRIMARY KEY, data jsonb, metas jsonb, dividas jsonb, updated_at timestamptz);</code><br/>
+          4. Copie a URL e API Key das Configurações do projeto<br/>
+        </div>
+
+        <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+          <button class="btn-primary-finavera" id="btn-save-supabase">💾 Salvar & Conectar</button>
+          <button class="btn-ghost-sm" id="btn-sync-now">🔄 Buscar da Nuvem</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- App Logic -->
   <script src="app.js"></script>
+
 </body>
 </html>
+
+

@@ -1,21 +1,27 @@
 /**
  * FinFlow 360 - Engine inspirado no Finavera
- * Multi-Perfil (Meu Pessoal, Namorada, Empresa PJ e Consolidado)
- * Orçado vs Realizado, Metas, Cofrinho (Porquinho) e Gestão de Categorias.
+ * Multi-Perfil (Rodrego, Rodrega, Empresa PJ e Consolidado)
+ * Orçado vs Realizado, Metas, Cofrinho (Porquinho), Dívidas e Gestão de Categorias.
  */
 
-// --- CONFIGURAÇÃO INICIAL DE METAS (Inspirado no Screenshot 2) ---
+// --- CONFIGURAÇÃO INICIAL DE METAS ---
 const DEFAULT_METAS = {
   compromissoMensal: 200.00,
-  reservaEmergencia: 25000.00,
-  liberdadeFinanceira: 800000.00,
-  outras: [
-    { id: 'm-1', name: 'Faculdade dos Filhos', target: 50000.00, active: true },
-    { id: 'm-2', name: 'Reforma da Cozinha', target: 10000.00, active: true },
-    { id: 'm-3', name: 'Viagem 2030', target: 35000.00, active: true },
-    { id: 'm-4', name: 'Festa de Casamento', target: 20000.00, active: true }
+  // Array único e 100% customizável - usuário cria, edita e exclui como quiser
+  customMetas: [
+    { id: 'cm-1', name: 'Reserva de Emergência', icon: '🛡️', target: 25000.00, saved: 0, active: true },
+    { id: 'cm-2', name: 'Liberdade Financeira', icon: '✨', target: 800000.00, saved: 0, active: true },
+    { id: 'cm-3', name: 'Viagem dos Sonhos', icon: '✈️', target: 15000.00, saved: 3200.00, active: true },
+    { id: 'cm-4', name: 'Reforma da Casa', icon: '🏠', target: 20000.00, saved: 0, active: true }
   ]
 };
+
+// --- CONFIGURAÇÃO INICIAL DE DÍVIDAS ---
+const DEFAULT_DIVIDAS = [
+  { id: 'div-1', name: 'Financiamento / Carnê', icon: '🏦', total: 15000.00, paid: 2000.00, monthlyMin: 850.00, active: true },
+  { id: 'div-2', name: 'Cartão de Crédito', icon: '💳', total: 3500.00, paid: 0, monthlyMin: 300.00, active: true }
+];
+
 
 // --- ESTRUTURA PADRÃO DE CATEGORIAS E ITENS POR PERFIL ---
 const DEFAULT_DATA = {
@@ -43,7 +49,7 @@ const DEFAULT_DATA = {
     ]
   },
 
-  // Categorias de Meu Pessoal
+  // Categorias de Rodrego
   categories_me: [
     // Entradas
     {
@@ -282,6 +288,11 @@ class FinanceState {
     this.theme = localStorage.getItem('finavera_theme') || 'light';
     this.data = this.loadData();
     this.metas = this.loadMetas();
+    this.dividas = this.loadDividas();
+    // Supabase config (filled by user via UI)
+    this.supabaseUrl = localStorage.getItem('finavera_sb_url') || '';
+    this.supabaseKey = localStorage.getItem('finavera_sb_key') || '';
+    this.supabaseUserId = localStorage.getItem('finavera_sb_uid') || 'shared';
   }
 
   loadData() {
@@ -303,7 +314,7 @@ class FinanceState {
   ensureFixosAndCofrinhos(data) {
     let changed = false;
 
-    // Migração de Gastos Fixos em Meu Pessoal
+    // Migração de Gastos Fixos em Rodrego
     if (data.categories_me && !data.categories_me.some(c => c.name.toLowerCase().includes('fixos'))) {
       const fixedCat = JSON.parse(JSON.stringify(DEFAULT_DATA.categories_me.find(c => c.id === 'cat-me-fixos')));
       // Inserir antes das demais saídas
@@ -354,12 +365,29 @@ class FinanceState {
   saveData(data) {
     this.data = data;
     localStorage.setItem('finavera_db', JSON.stringify(data));
+    this.syncToSupabase();
   }
 
   loadMetas() {
     const raw = localStorage.getItem('finavera_metas');
     if (raw) {
-      try { return JSON.parse(raw); } catch (e) { console.error(e); }
+      try {
+        const parsed = JSON.parse(raw);
+        // Migrate old format (com reservaEmergencia/liberdadeFinanceira) para o novo
+        if (!parsed.customMetas) {
+          const migrated = {
+            compromissoMensal: parsed.compromissoMensal || 200,
+            customMetas: [
+              { id: 'cm-1', name: 'Reserva de Emergência', icon: '🛡️', target: parsed.reservaEmergencia || 25000, saved: 0, active: true },
+              { id: 'cm-2', name: 'Liberdade Financeira', icon: '✨', target: parsed.liberdadeFinanceira || 800000, saved: 0, active: true },
+              ...(parsed.outras || []).map(m => ({ ...m, id: 'cm-' + m.id, icon: '🎯', saved: 0 }))
+            ]
+          };
+          this.saveMetas(migrated);
+          return migrated;
+        }
+        return parsed;
+      } catch (e) { console.error(e); }
     }
     this.saveMetas(DEFAULT_METAS);
     return JSON.parse(JSON.stringify(DEFAULT_METAS));
@@ -368,6 +396,71 @@ class FinanceState {
   saveMetas(metas) {
     this.metas = metas;
     localStorage.setItem('finavera_metas', JSON.stringify(metas));
+    this.syncToSupabase();
+  }
+
+  loadDividas() {
+    const raw = localStorage.getItem('finavera_dividas');
+    if (raw) {
+      try { return JSON.parse(raw); } catch (e) { console.error(e); }
+    }
+    this.saveDividas(DEFAULT_DIVIDAS);
+    return JSON.parse(JSON.stringify(DEFAULT_DIVIDAS));
+  }
+
+  saveDividas(dividas) {
+    this.dividas = dividas;
+    localStorage.setItem('finavera_dividas', JSON.stringify(dividas));
+    this.syncToSupabase();
+  }
+
+  // --- DÍVIDAS METHODS ---
+  getTotalDividas() {
+    return (this.dividas || []).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.paid || 0)), 0);
+  }
+
+  getTotalPaidDividas() {
+    return (this.dividas || []).reduce((s, d) => s + (d.paid || 0), 0);
+  }
+
+  getMonthlyDividas() {
+    return (this.dividas || []).reduce((s, d) => s + (d.monthlyMin || 0), 0);
+  }
+
+  abaterDivida(divId, amount) {
+    const d = (this.dividas || []).find(d => d.id === divId);
+    if (d) {
+      d.paid = Math.min((d.paid || 0) + amount, d.total || 0);
+      this.saveDividas(this.dividas);
+      return d;
+    }
+    return null;
+  }
+
+  addDivida(name, icon, total, monthlyMin) {
+    const nova = {
+      id: 'div-' + Date.now(),
+      name,
+      icon: icon || '💳',
+      total: total || 0,
+      paid: 0,
+      monthlyMin: monthlyMin || 0,
+      active: true
+    };
+    if (!this.dividas) this.dividas = [];
+    this.dividas.push(nova);
+    this.saveDividas(this.dividas);
+    return nova;
+  }
+
+  deleteDivida(divId) {
+    this.dividas = (this.dividas || []).filter(d => d.id !== divId);
+    this.saveDividas(this.dividas);
+  }
+
+  editDivida(divId, fields) {
+    const d = (this.dividas || []).find(d => d.id === divId);
+    if (d) { Object.assign(d, fields); this.saveDividas(this.dividas); }
   }
 
   getCategoriesForProfile(profile) {
@@ -558,6 +651,86 @@ class FinanceState {
     }
     return null;
   }
+
+  // --- SUPABASE SYNC (Tempo Real para Vocês Dois) ---
+  syncToSupabase() {
+    if (!this.supabaseUrl || !this.supabaseKey) return;
+    clearTimeout(this._syncTimer);
+    this._syncTimer = setTimeout(() => this._doSync(), 800); // debounce 800ms
+  }
+
+  async _doSync() {
+    if (!this.supabaseUrl || !this.supabaseKey) return;
+    try {
+      setSyncStatus('syncing');
+      const payload = {
+        id: this.supabaseUserId,
+        data: this.data,
+        metas: this.metas,
+        dividas: this.dividas,
+        updated_at: new Date().toISOString()
+      };
+      const res = await fetch(`${this.supabaseUrl}/rest/v1/finflow_state`, {
+        method: 'POST',
+        headers: {
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setSyncStatus('ok');
+      } else {
+        setSyncStatus('error');
+      }
+    } catch (e) {
+      console.warn('Supabase sync failed:', e);
+      setSyncStatus('error');
+    }
+  }
+
+  async loadFromSupabase() {
+    if (!this.supabaseUrl || !this.supabaseKey) return false;
+    try {
+      setSyncStatus('syncing');
+      const res = await fetch(
+        `${this.supabaseUrl}/rest/v1/finflow_state?id=eq.${this.supabaseUserId}&limit=1`,
+        {
+          headers: {
+            'apikey': this.supabaseKey,
+            'Authorization': `Bearer ${this.supabaseKey}`
+          }
+        }
+      );
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows.length > 0) {
+          const row = rows[0];
+          if (row.data) { this.data = row.data; localStorage.setItem('finavera_db', JSON.stringify(row.data)); }
+          if (row.metas) { this.metas = row.metas; localStorage.setItem('finavera_metas', JSON.stringify(row.metas)); }
+          if (row.dividas) { this.dividas = row.dividas; localStorage.setItem('finavera_dividas', JSON.stringify(row.dividas)); }
+          setSyncStatus('ok');
+          return true;
+        }
+      }
+      setSyncStatus('error');
+    } catch (e) {
+      console.warn('Supabase load failed:', e);
+      setSyncStatus('error');
+    }
+    return false;
+  }
+
+  setSupabaseConfig(url, key, uid) {
+    this.supabaseUrl = url;
+    this.supabaseKey = key;
+    this.supabaseUserId = uid || 'shared';
+    localStorage.setItem('finavera_sb_url', url);
+    localStorage.setItem('finavera_sb_key', key);
+    localStorage.setItem('finavera_sb_uid', this.supabaseUserId);
+  }
 }
 
 // --- INSTÂNCIA DO ESTADO ---
@@ -717,21 +890,72 @@ function setupEventListeners() {
     }
   });
 
-  // Add Other Meta in Metas Modal
-  document.getElementById('btn-add-other-meta').addEventListener('click', () => {
-    const name = prompt('Nome da nova meta (Ex: Viagem Paris, Troca de Carro):');
-    if (!name) return;
-    const targetStr = prompt('Valor alvo (R$):', '5000');
-    const target = parseFloat(targetStr) || 1000;
-    state.metas.outras.push({
-      id: 'm-' + Date.now(),
-      name,
-      target,
-      active: true
+  // Custom Metas (new unified customizable list)
+  const btnAddCustomMeta = document.getElementById('btn-add-custom-meta');
+  if (btnAddCustomMeta) {
+    btnAddCustomMeta.addEventListener('click', () => {
+      const name = prompt('Nome da nova meta (Ex: Viagem a Paris, Troca de Carro, Faculdade):');
+      if (!name) return;
+      const iconStr = prompt('Ícone/Emoji para a meta (opcional):', '🎯');
+      const targetStr = prompt('Valor alvo (R$):', '5000');
+      const savedStr = prompt('Quanto você já tem guardado para esta meta? (R$):', '0');
+      const target = parseFloat(targetStr) || 1000;
+      const saved = parseFloat(savedStr) || 0;
+      if (!state.metas.customMetas) state.metas.customMetas = [];
+      state.metas.customMetas.push({
+        id: 'cm-' + Date.now(),
+        name,
+        icon: iconStr || '🎯',
+        target,
+        saved,
+        active: true
+      });
+      state.saveMetas(state.metas);
+      renderMetasModalContent();
+      showToast('✅ Nova meta cadastrada!');
     });
-    state.saveMetas(state.metas);
-    renderMetasModalContent();
-    showToast('Nova meta cadastrada!');
+  }
+
+  // Dívidas Modal
+  const openDividasModal = () => {
+    renderDividasModalUI();
+    document.getElementById('modal-dividas').classList.add('open');
+  };
+  const closeDividasModal = () => document.getElementById('modal-dividas').classList.remove('open');
+
+  const btnDividasHeader = document.getElementById('btn-header-dividas');
+  if (btnDividasHeader) btnDividasHeader.addEventListener('click', openDividasModal);
+  const btnOpenDiviCard = document.getElementById('btn-open-dividas-modal');
+  if (btnOpenDiviCard) btnOpenDiviCard.addEventListener('click', openDividasModal);
+  const btnQuickAbater = document.getElementById('btn-quick-abater-divida');
+  if (btnQuickAbater) btnQuickAbater.addEventListener('click', openDividasModal);
+  const dockBtnDividas = document.getElementById('dock-btn-dividas');
+  if (dockBtnDividas) dockBtnDividas.addEventListener('click', openDividasModal);
+  const btnCloseDividasModal = document.getElementById('btn-close-dividas-modal');
+  if (btnCloseDividasModal) btnCloseDividasModal.addEventListener('click', closeDividasModal);
+  const btnCloseDividasBtn = document.getElementById('btn-close-dividas-btn');
+  if (btnCloseDividasBtn) btnCloseDividasBtn.addEventListener('click', closeDividasModal);
+  const modalDividas = document.getElementById('modal-dividas');
+  if (modalDividas) modalDividas.addEventListener('click', (e) => { if (e.target.id === 'modal-dividas') closeDividasModal(); });
+
+  const btnAbaterDivida = document.getElementById('btn-action-abater-divida');
+  if (btnAbaterDivida) btnAbaterDivida.addEventListener('click', handleAbaterDivida);
+
+  const btnCreateDivida = document.getElementById('btn-create-divida');
+  if (btnCreateDivida) btnCreateDivida.addEventListener('click', handleCreateDivida);
+
+  // Supabase Config Modal
+  const btnOpenSupabase = document.getElementById('btn-open-supabase-modal');
+  if (btnOpenSupabase) btnOpenSupabase.addEventListener('click', openSupabaseModal);
+  const btnCloseSupabase = document.getElementById('btn-close-supabase-modal');
+  if (btnCloseSupabase) btnCloseSupabase.addEventListener('click', closeSupabaseModal);
+  const btnSaveSupabase = document.getElementById('btn-save-supabase');
+  if (btnSaveSupabase) btnSaveSupabase.addEventListener('click', handleSaveSupabaseConfig);
+  const btnSyncNow = document.getElementById('btn-sync-now');
+  if (btnSyncNow) btnSyncNow.addEventListener('click', async () => {
+    const loaded = await state.loadFromSupabase();
+    if (loaded) { renderApp(); showToast('☁️ Dados atualizados da nuvem!'); }
+    else showToast('Nuvem não configurada ou sem dados ainda.');
   });
 }
 
@@ -752,12 +976,12 @@ function switchProfile(profileId) {
 
   if (profileId === 'me') {
     welcomeEl.textContent = 'Bem-vindo(a), Você!';
-    pciLabel.textContent = 'Visualizando: Meu Pessoal';
+    pciLabel.textContent = 'Visualizando: Rodrego';
     pciDot.style.backgroundColor = 'var(--color-blue)';
     if (consRow) consRow.style.display = 'none';
   } else if (profileId === 'girlfriend') {
-    welcomeEl.textContent = 'Bem-vinda, Namorada!';
-    pciLabel.textContent = 'Visualizando: Namorada';
+    welcomeEl.textContent = 'Bem-vinda, Rodrega!';
+    pciLabel.textContent = 'Visualizando: Rodrega';
     pciDot.style.backgroundColor = 'var(--color-pink)';
     if (consRow) consRow.style.display = 'none';
   } else if (profileId === 'business') {
@@ -847,6 +1071,9 @@ function renderApp() {
 
   // 10. Atualizar Acerto de Contas do Casal
   updateCoupleSettlementMath();
+
+  // 11. Atualizar KPI de Dívidas
+  updateDividasKPI();
 }
 
 // --- ATUALIZAÇÃO DO GAUGE SEMICIRCULAR SVG ---
@@ -1106,7 +1333,7 @@ function closeCofrinhoModal() {
 
 function renderCofrinhoModalUI() {
   const profile = state.activeProfile === 'all' ? 'me' : state.activeProfile;
-  const profileLabels = { me: 'Meu Pessoal', girlfriend: 'Namorada', business: 'Empresa (PJ)' };
+  const profileLabels = { me: 'Rodrego', girlfriend: 'Rodrega', business: 'Empresa (PJ)' };
   
   const total = state.getTotalCofrinho(profile);
   document.getElementById('modal-cofrinho-total').textContent = fmtCurrency(total);
@@ -1253,9 +1480,9 @@ function updateCoupleSettlementMath() {
   } else if (Math.abs(netDue) < 0.01) {
     verdictMsg.textContent = 'Contas 100% equilibradas!';
   } else if (netDue > 0) {
-    verdictMsg.textContent = `Sua namorada deve acertar ${fmtCurrency(netDue)} com você`;
+    verdictMsg.textContent = `Rodrega deve acertar ${fmtCurrency(netDue)} com você`;
   } else {
-    verdictMsg.textContent = `Você deve acertar ${fmtCurrency(Math.abs(netDue))} com sua namorada`;
+    verdictMsg.textContent = `Você deve acertar ${fmtCurrency(Math.abs(netDue))} com Rodrego`;
   }
 
   const listContainer = document.getElementById('couple-shared-items-list');
@@ -1267,7 +1494,7 @@ function updateCoupleSettlementMath() {
         <div>
           <strong>${i.name}</strong>
           <small style="color: var(--text-muted); margin-left: 0.4rem;">
-            (Pago por: ${i.payer === 'me' ? 'Você' : 'Namorada'})
+            (Pago por: ${i.payer === 'me' ? 'Você' : 'Rodrega'})
           </small>
         </div>
         <strong>${fmtCurrency(i.realizado)}</strong>
@@ -1287,34 +1514,47 @@ function closeMetasModal() {
 }
 
 function renderMetasModalContent() {
-  document.getElementById('meta-compromisso-display').textContent = fmtCurrency(state.metas.compromissoMensal);
-  document.getElementById('meta-reserva-display').textContent = fmtCurrency(state.metas.reservaEmergencia);
-  document.getElementById('meta-liberdade-display').textContent = fmtCurrency(state.metas.liberdadeFinanceira);
+  // Compromisso mensal
+  const compEl = document.getElementById('meta-compromisso-display');
+  if (compEl) compEl.textContent = fmtCurrency(state.metas.compromissoMensal);
 
-  const container = document.getElementById('other-metas-container');
-  container.innerHTML = state.metas.outras.map(meta => `
-    <div class="meta-item-card">
-      <div class="mic-left">
-        <span class="mic-icon-pig">🐖</span>
-        <div class="mic-info">
-          <strong>${meta.name}</strong>
-          <span>${fmtCurrency(meta.target)}</span>
+  // Novas metas 100% personalizáveis
+  const container = document.getElementById('custom-metas-container');
+  if (!container) return;
+
+  const metas = state.metas.customMetas || [];
+  if (metas.length === 0) {
+    container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;">Nenhuma meta cadastrada ainda. Clique em + Nova Meta para começar!</p>';
+    return;
+  }
+
+  container.innerHTML = metas.map(meta => {
+    const pct = meta.target > 0 ? Math.min(Math.round((meta.saved / meta.target) * 100), 100) : 0;
+    return `
+      <div class="meta-item-card-new">
+        <div class="micn-top">
+          <div class="micn-left">
+            <span class="micn-icon">${meta.icon || '🎯'}</span>
+            <div class="micn-info">
+              <strong>${meta.name}</strong>
+              <span class="micn-values">${fmtCurrency(meta.saved)} de ${fmtCurrency(meta.target)} &nbsp;·&nbsp; <span class="micn-pct">${pct}%</span></span>
+            </div>
+          </div>
+          <div class="mic-actions">
+            <button class="btn-icon-soft" onclick="editCustomMeta('${meta.id}')" title="Editar meta">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+            </button>
+            <button class="btn-icon-soft btn-cat-action delete" onclick="deleteCustomMeta('${meta.id}')" title="Excluir meta">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="cic-progress-bar-bg">
+          <div class="cic-progress-fill" style="width: ${pct}%; background: ${pct >= 100 ? '#10b981' : 'linear-gradient(90deg, #6366f1, #ec4899)'};"></div>
         </div>
       </div>
-      <div class="mic-actions">
-        <button class="btn-icon-soft" onclick="toggleMetaVisibility('${meta.id}')" title="Exibir/Ocultar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-          </svg>
-        </button>
-        <button class="btn-icon-soft" onclick="editOtherMeta('${meta.id}')" title="Editar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 window.editMetaCompromisso = function() {
@@ -1329,44 +1569,34 @@ window.editMetaCompromisso = function() {
   }
 };
 
-window.editMetaGoal = function(type) {
-  if (type === 'reserva') {
-    const cur = state.metas.reservaEmergencia;
-    const val = prompt('Alvo da Reserva de Emergência (R$):', cur);
-    if (val !== null) {
-      state.metas.reservaEmergencia = parseFloat(val) || 25000;
-      state.saveMetas(state.metas);
-      renderMetasModalContent();
-      showToast('Reserva de emergência atualizada!');
-    }
-  } else if (type === 'liberdade') {
-    const cur = state.metas.liberdadeFinanceira;
-    const val = prompt('Alvo da Liberdade Financeira (R$):', cur);
-    if (val !== null) {
-      state.metas.liberdadeFinanceira = parseFloat(val) || 800000;
-      state.saveMetas(state.metas);
-      renderMetasModalContent();
-      showToast('Meta de liberdade financeira atualizada!');
-    }
-  }
-};
-
-window.editOtherMeta = function(id) {
-  const meta = state.metas.outras.find(m => m.id === id);
+window.editCustomMeta = function(id) {
+  const meta = (state.metas.customMetas || []).find(m => m.id === id);
   if (!meta) return;
   const newName = prompt('Nome da meta:', meta.name);
-  if (!newName) return;
+  if (newName === null) return;
+  const newIcon = prompt('Ícone/Emoji:', meta.icon || '🎯');
   const newTargetStr = prompt('Valor alvo (R$):', meta.target);
-  meta.name = newName;
+  const newSavedStr = prompt('Valor já guardado (R$):', meta.saved || 0);
+  if (newName) meta.name = newName.trim();
+  if (newIcon) meta.icon = newIcon.trim();
   meta.target = parseFloat(newTargetStr) || meta.target;
+  meta.saved = parseFloat(newSavedStr) || 0;
   state.saveMetas(state.metas);
   renderMetasModalContent();
-  showToast('Meta atualizada!');
+  renderApp();
+  showToast('✅ Meta atualizada!');
 };
 
-window.toggleMetaVisibility = function(id) {
-  showToast('Visibilidade da meta alternada.');
+window.deleteCustomMeta = function(id) {
+  if (!confirm('Deseja realmente excluir esta meta?')) return;
+  state.metas.customMetas = (state.metas.customMetas || []).filter(m => m.id !== id);
+  state.saveMetas(state.metas);
+  renderMetasModalContent();
+  renderApp();
+  showToast('Meta removida.');
 };
+
+
 
 // --- MODAL DE NOVO ITEM / LANÇAMENTO (+ NOVO) ---
 function openItemModal() {
@@ -1473,7 +1703,7 @@ function closeCoupleModal() {
 function openExtratoModal() {
   const tbody = document.getElementById('extrato-table-body');
   const allProfiles = ['me', 'girlfriend', 'business'];
-  const profileLabels = { me: 'Meu Pessoal', girlfriend: 'Namorada', business: 'Empresa (PJ)' };
+  const profileLabels = { me: 'Rodrego', girlfriend: 'Rodrega', business: 'Empresa (PJ)' };
 
   let rowsHtml = '';
   allProfiles.forEach(p => {
@@ -1525,7 +1755,7 @@ window.deleteFromExtrato = function(catId, itemId) {
 function exportCSV() {
   const headers = ['Perfil', 'Tipo', 'Categoria', 'Item', 'Orçado (R$)', 'Realizado (R$)', 'Dividido Casal'];
   const rows = [];
-  const profileLabels = { me: 'Meu Pessoal', girlfriend: 'Namorada', business: 'Empresa PJ' };
+  const profileLabels = { me: 'Rodrego', girlfriend: 'Rodrega', business: 'Empresa PJ' };
 
   ['me', 'girlfriend', 'business'].forEach(p => {
     const cats = state.data[`categories_${p}`] || [];
@@ -1609,4 +1839,204 @@ function showToast(message) {
     toast.style.transition = 'opacity 250ms ease';
     setTimeout(() => toast.remove(), 250);
   }, 2400);
+}
+
+
+// =============================================================
+// --- DÍVIDAS & PASSIVOS ---
+// =============================================================
+function renderDividasModalUI() {
+  const totalRestante = state.getTotalDividas();
+  const totalPago = state.getTotalPaidDividas();
+  const totalGeral = totalRestante + totalPago;
+  const mensalidade = state.getMonthlyDividas();
+
+  // KPI no topo do modal
+  const el = (id) => document.getElementById(id);
+  if (el('div-total-restante')) el('div-total-restante').textContent = fmtCurrency(totalRestante);
+  if (el('div-total-pago')) el('div-total-pago').textContent = fmtCurrency(totalPago);
+  if (el('div-mensalidade-total')) el('div-mensalidade-total').textContent = fmtCurrency(mensalidade);
+
+  // Populate select for abatimento
+  const selectDiv = el('select-divida-abater');
+  if (selectDiv) {
+    selectDiv.innerHTML = '<option value="">Selecione a dívida...</option>' +
+      (state.dividas || []).map(d => {
+        const saldo = Math.max(0, d.total - (d.paid || 0));
+        return `<option value="${d.id}">${d.icon || '💳'} ${d.name} — saldo: ${fmtCurrency(saldo)}</option>`;
+      }).join('');
+  }
+
+  // List cards
+  const container = el('dividas-list-container');
+  if (!container) return;
+
+  if (!state.dividas || state.dividas.length === 0) {
+    container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1.5rem 0;">Nenhuma dívida cadastrada. Adicione abaixo!</p>';
+    return;
+  }
+
+  container.innerHTML = state.dividas.map(d => {
+    const saldo = Math.max(0, (d.total || 0) - (d.paid || 0));
+    const pct = d.total > 0 ? Math.min(Math.round(((d.paid || 0) / d.total) * 100), 100) : 0;
+    const done = saldo <= 0;
+    return `
+      <div class="divida-card${done ? ' divida-quitada' : ''}">
+        <div class="divida-card-header">
+          <div class="divida-icon-name">
+            <span class="divida-icon">${d.icon || '💳'}</span>
+            <div>
+              <strong>${d.name}</strong>
+              <span class="divida-monthly">Parcela mínima: ${fmtCurrency(d.monthlyMin)}/mês</span>
+            </div>
+          </div>
+          <div class="divida-card-actions">
+            <button class="btn-icon-soft" onclick="openEditDividaPrompt('${d.id}')" title="Editar dívida">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+            </button>
+            <button class="btn-icon-soft btn-cat-action delete" onclick="deleteDividaCard('${d.id}')" title="Remover dívida">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="divida-values">
+          <span class="divida-saldo ${done ? 'saldo-quitado' : ''}">${done ? '✅ QUITADA' : 'Saldo: ' + fmtCurrency(saldo)}</span>
+          <span class="divida-total-paid">Pago: ${fmtCurrency(d.paid || 0)} / ${fmtCurrency(d.total)}</span>
+        </div>
+        <div class="cic-progress-bar-bg" style="margin-top: 0.5rem;">
+          <div class="cic-progress-fill" style="width: ${pct}%; background: ${done ? '#10b981' : 'linear-gradient(90deg, #f59e0b, #ef4444)'};"></div>
+        </div>
+        <div style="text-align: right; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">${pct}% quitado</div>
+      </div>
+    `;
+  }).join('');
+
+  // Update the KPI card in main dashboard
+  updateDividasKPI();
+}
+
+function updateDividasKPI() {
+  const totalRestante = state.getTotalDividas();
+  const totalPago = state.getTotalPaidDividas();
+  const kpiEl = document.getElementById('kpi-dividas-total');
+  if (kpiEl) kpiEl.textContent = fmtCurrency(totalRestante);
+  const kpiMonEl = document.getElementById('kpi-dividas-mensal');
+  if (kpiMonEl) kpiMonEl.textContent = fmtCurrency(state.getMonthlyDividas());
+  const kpiSub = document.getElementById('kpi-dividas-paid-sub');
+  if (kpiSub) {
+    const totalGeral = totalRestante + totalPago;
+    const pct = totalGeral > 0 ? Math.round((totalPago / totalGeral) * 100) : 0;
+    kpiSub.textContent = `Pago: ${fmtCurrency(totalPago)} (${pct}%)`;
+  }
+}
+
+function handleAbaterDivida() {
+  const selectEl = document.getElementById('select-divida-abater');
+  const inputEl = document.getElementById('input-abatimento-valor');
+  if (!selectEl || !inputEl) return;
+
+  const divId = selectEl.value;
+  const amount = parseFloat(inputEl.value);
+
+  if (!divId) { showToast('Selecione uma dívida.'); return; }
+  if (!amount || amount <= 0) { showToast('Informe um valor válido.'); return; }
+
+  const updated = state.abaterDivida(divId, amount);
+  if (updated) {
+    inputEl.value = '';
+    renderDividasModalUI();
+    renderApp();
+    const saldo = Math.max(0, updated.total - updated.paid);
+    showToast(saldo <= 0 ? `🎉 Parabéns! "${updated.name}" foi quitada!` : `✅ R$ ${amount.toFixed(2)} abatido de "${updated.name}"!`);
+  }
+}
+
+function handleCreateDivida() {
+  const name = prompt('Nome da dívida (Ex: Financiamento do Carro, Cartão Nubank, Empréstimo):');
+  if (!name) return;
+  const icon = prompt('Ícone/Emoji:', '💳');
+  const totalStr = prompt('Valor total da dívida (R$):');
+  const minStr = prompt('Parcela mínima mensal (R$):', '0');
+  const total = parseFloat(totalStr);
+  if (!total || total <= 0) { showToast('Informe um valor total válido.'); return; }
+  const monthly = parseFloat(minStr) || 0;
+
+  state.addDivida(name.trim(), icon || '💳', total, monthly);
+  renderDividasModalUI();
+  renderApp();
+  showToast(`✅ Dívida "${name}" cadastrada!`);
+}
+
+window.openEditDividaPrompt = function(id) {
+  const d = (state.dividas || []).find(d => d.id === id);
+  if (!d) return;
+  const newName = prompt('Nome:', d.name);
+  if (newName === null) return;
+  const newIcon = prompt('Ícone:', d.icon);
+  const newTotal = prompt('Valor total (R$):', d.total);
+  const newPaid = prompt('Quanto já foi pago (R$):', d.paid || 0);
+  const newMonthly = prompt('Parcela mínima mensal (R$):', d.monthlyMin);
+  state.editDivida(id, {
+    name: newName.trim() || d.name,
+    icon: (newIcon || d.icon).trim(),
+    total: parseFloat(newTotal) || d.total,
+    paid: parseFloat(newPaid) || 0,
+    monthlyMin: parseFloat(newMonthly) || 0
+  });
+  renderDividasModalUI();
+  renderApp();
+  showToast('✅ Dívida atualizada!');
+};
+
+window.deleteDividaCard = function(id) {
+  const d = (state.dividas || []).find(d => d.id === id);
+  if (!d) return;
+  if (!confirm(`Deseja remover "${d.name}" da lista de dívidas?`)) return;
+  state.deleteDivida(id);
+  renderDividasModalUI();
+  renderApp();
+  showToast('Dívida removida.');
+};
+
+// =============================================================
+// --- SYNC STATUS INDICATOR ---
+// =============================================================
+function setSyncStatus(status) {
+  const btn = document.getElementById('btn-open-supabase-modal');
+  if (!btn) return;
+  const icons = { syncing: '🔄', ok: '☁️', error: '⚠️' };
+  const icon = btn.querySelector('.sync-icon');
+  if (icon) icon.textContent = icons[status] || '☁️';
+  btn.title = status === 'ok' ? 'Sincronizado com a nuvem ✓' : status === 'error' ? 'Erro de sincronização' : 'Sincronizando...';
+}
+
+// =============================================================
+// --- SUPABASE MODAL ---
+// =============================================================
+function openSupabaseModal() {
+  // Pre-fill existing config
+  const urlEl = document.getElementById('input-supabase-url');
+  const keyEl = document.getElementById('input-supabase-key');
+  const uidEl = document.getElementById('input-supabase-uid');
+  if (urlEl) urlEl.value = state.supabaseUrl || '';
+  if (keyEl) keyEl.value = state.supabaseKey || '';
+  if (uidEl) uidEl.value = state.supabaseUserId || 'shared';
+  document.getElementById('modal-supabase').classList.add('open');
+}
+
+function closeSupabaseModal() {
+  document.getElementById('modal-supabase').classList.remove('open');
+}
+
+async function handleSaveSupabaseConfig() {
+  const url = (document.getElementById('input-supabase-url')?.value || '').trim();
+  const key = (document.getElementById('input-supabase-key')?.value || '').trim();
+  const uid = (document.getElementById('input-supabase-uid')?.value || 'shared').trim();
+  if (!url || !key) { showToast('Preencha URL e API Key do Supabase.'); return; }
+  state.setSupabaseConfig(url, key, uid);
+  closeSupabaseModal();
+  showToast('☁️ Config salva! Sincronizando...');
+  const loaded = await state.loadFromSupabase();
+  if (loaded) { renderApp(); showToast('☁️ Dados carregados da nuvem com sucesso!'); }
+  else { state.syncToSupabase(); showToast('☁️ Nuvem configurada! Enviando seus dados...'); }
 }
