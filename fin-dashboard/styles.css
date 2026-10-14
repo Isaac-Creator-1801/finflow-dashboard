@@ -96,12 +96,19 @@ body {
 button, input, select, textarea {
   font-family: inherit;
   color: inherit;
+  touch-action: manipulation;
 }
 
 button {
   cursor: pointer;
   border: none;
   background: none;
+  user-select: none;
+}
+
+/* GPU Layer optimizations for smooth scrolling and instant clicks */
+.app-container, .card-kpi, .accordion-card, .modal-dialog, .dock-container {
+  transform: translateZ(0);
 }
 
 /* ==========================================================================
@@ -971,7 +978,7 @@ button {
   font-weight: 700;
   color: var(--text-main);
   outline: none;
-  transition: all var(--transition-fast);
+  transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .inline-realizado-input:focus {

@@ -1037,12 +1037,11 @@ function switchProfile(profileId) {
   renderApp();
 }
 
-// --- PIPELINE PRINCIPAL DE RENDERIZAÇÃO ---
-function renderApp() {
+// --- ATUALIZAÇÃO ULTRA-RÁPIDA DE MÉTRICAS (SEM RE-RENDERIZAR O DOM) ---
+function updateDashboardMetrics() {
   const categories = state.getCategoriesForProfile(state.activeProfile);
   const saldoInicial = state.getSaldoInicial(state.activeProfile);
 
-  // 1. Cálculos de Totais
   let receitas = 0;
   let despesas = 0;
   let totalOrcadoDespesas = 0;
@@ -1066,52 +1065,54 @@ function renderApp() {
   const receitasComSaldo = receitas + saldoInicial;
   const saldoFinal = receitasComSaldo - despesas;
 
-  // 2. Atualizar Cards da Row 1 (KPIs Finavera)
-  document.getElementById('kpi-receitas').textContent = fmtCurrency(receitas);
-  document.getElementById('kpi-receitas-saldo').textContent = fmtCurrency(receitasComSaldo);
-  document.getElementById('kpi-despesas').textContent = fmtCurrency(despesas);
-  document.getElementById('kpi-saldo-final').textContent = fmtCurrency(saldoFinal);
+  // Atualização direta de textContent (instantânea, sem repintura desnecessária)
+  const setTxt = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && el.textContent !== val) el.textContent = val;
+  };
 
-  // 3. Atualizar Total Investido & % Compromisso Mensal
-  document.getElementById('kpi-invested').textContent = fmtCurrency(totalInvestido);
+  setTxt('kpi-receitas', fmtCurrency(receitas));
+  setTxt('kpi-receitas-saldo', fmtCurrency(receitasComSaldo));
+  setTxt('kpi-despesas', fmtCurrency(despesas));
+  setTxt('kpi-saldo-final', fmtCurrency(saldoFinal));
+
+  setTxt('kpi-invested', fmtCurrency(totalInvestido));
   const compromisso = state.metas.compromissoMensal || 200;
   const pctInvestido = compromisso > 0 ? Math.min(Math.round((totalInvestido / compromisso) * 100), 100) : 0;
-  document.getElementById('kpi-invested-pct').textContent = `${pctInvestido}%`;
+  setTxt('kpi-invested-pct', `${pctInvestido}%`);
 
-  // 4. Atualizar Card do Cofrinho (Porquinho)
   const totalCofrinho = state.getTotalCofrinho(state.activeProfile);
-  const kpiCof = document.getElementById('kpi-cofrinho-total');
-  if (kpiCof) kpiCof.textContent = fmtCurrency(totalCofrinho);
+  setTxt('kpi-cofrinho-total', fmtCurrency(totalCofrinho));
 
-  // 5. Atualizar Orçamento Utilizado (Gauge Semicircular)
-  document.getElementById('kpi-total-orcado').textContent = fmtCurrency(totalOrcadoDespesas);
-  document.getElementById('kpi-total-realizado').textContent = fmtCurrency(despesas);
+  setTxt('kpi-total-orcado', fmtCurrency(totalOrcadoDespesas));
+  setTxt('kpi-total-realizado', fmtCurrency(despesas));
   updateGauge(despesas, totalOrcadoDespesas);
 
-  // 6. Saldo Inicial no Card
-  document.getElementById('val-saldo-inicial').textContent = fmtCurrency(saldoInicial);
+  setTxt('val-saldo-inicial', fmtCurrency(saldoInicial));
   const initialInput = document.getElementById('input-saldo-inicial');
   if (initialInput && document.activeElement !== initialInput) {
     initialInput.value = saldoInicial;
   }
 
-  // 7. Atualizar Totais das Colunas
-  document.getElementById('col-entradas-total').textContent = fmtCurrency(receitas);
-  document.getElementById('col-saidas-total').textContent = fmtCurrency(despesas);
+  setTxt('col-entradas-total', fmtCurrency(receitas));
+  setTxt('col-saidas-total', fmtCurrency(despesas));
 
-  // 8. Renderizar Categorias Dinâmicas (Entradas vs Saídas)
-  renderCategoriesColumns(categories);
-
-  // 9. Se perfil consolidado, calcular números lado a lado
   if (state.activeProfile === 'all') {
     renderConsolidatedCards();
   }
 
-  // 10. Atualizar Acerto de Contas do Casal
-  updateCoupleSettlementMath();
+  // Atualiza apenas o acerto do casal sem reconstruir listas ocultas
+  updateCoupleSettlementMath(false);
 
-  // 11. Atualizar KPI de Dívidas
+  // Atualiza card de dívidas
   updateDividasKPI();
+}
+
+// --- PIPELINE COMPLETO DE RENDERIZAÇÃO (CATEGORIAS + MÉTRICAS) ---
+function renderApp() {
+  const categories = state.getCategoriesForProfile(state.activeProfile);
+  renderCategoriesColumns(categories);
+  updateDashboardMetrics();
 }
 
 // --- ATUALIZAÇÃO DO GAUGE SEMICIRCULAR SVG ---
@@ -1176,7 +1177,7 @@ function renderCategoryCardHtml(cat) {
           </div>
         </div>
         <div class="acc-right">
-          <span class="acc-val ${isSaida ? 'value-red' : ''}">${fmtCurrency(totalCat)}</span>
+          <span class="acc-val ${isSaida ? 'value-red' : ''}" id="acc-val-${cat.id}">${fmtCurrency(totalCat)}</span>
           
           <!-- Category Actions: Rename / Delete -->
           <div class="cat-header-actions" onclick="event.stopPropagation()">
@@ -1258,19 +1259,30 @@ window.toggleAccordion = function(bodyId) {
   }
 };
 
-// --- HANDLERS INLINE DE ITENS ---
+// --- HANDLERS INLINE DE ITENS (RESPOSTA INSTANTÂNEA, SEM TRAVAR) ---
+window.updateCategoryBadge = function(catId) {
+  const badge = document.getElementById(`acc-val-${catId}`);
+  if (!badge) return;
+  const cats = state.getCategoriesForProfile(state.activeProfile);
+  const cat = cats.find(c => c.id === catId);
+  if (cat) {
+    const totalCat = cat.items.reduce((s, i) => s + (i.realizado || 0), 0);
+    badge.textContent = fmtCurrency(totalCat);
+  }
+};
+
 window.handleInlineOrcadoChange = function(catId, itemId, val) {
   const newNum = parseFloat(val) || 0;
   state.updateItemOrcado(catId, itemId, newNum);
-  renderApp();
-  showToast('Orçado atualizado!');
+  updateCategoryBadge(catId);
+  updateDashboardMetrics();
 };
 
 window.handleInlineRealizadoChange = function(catId, itemId, val) {
   const newNum = parseFloat(val) || 0;
   state.updateItemRealizado(catId, itemId, newNum);
-  renderApp();
-  showToast('Realizado atualizado!');
+  updateCategoryBadge(catId);
+  updateDashboardMetrics();
 };
 
 window.handleRenameItem = function(catId, itemId) {
@@ -1466,8 +1478,8 @@ function handleCreateCaixinha() {
   showToast(`Caixinha "${name}" adicionada ao Porquinho!`);
 }
 
-// --- ACERTO DE CONTAS DO CASAL (MOTOR MATEMÁTICO) ---
-function updateCoupleSettlementMath() {
+// --- ACERTO DE CONTAS DO CASAL (MOTOR MATEMÁTICO OTIMIZADO) ---
+function updateCoupleSettlementMath(renderList = false) {
   const allCats = [
     ...(state.data.categories_me || []),
     ...(state.data.categories_girlfriend || [])
@@ -1488,7 +1500,9 @@ function updateCoupleSettlementMath() {
           } else {
             paidByGf += item.realizado;
           }
-          sharedList.push({ ...item, payer: cat.profile });
+          if (renderList) {
+            sharedList.push({ ...item, payer: cat.profile });
+          }
         }
       });
     }
@@ -1498,47 +1512,61 @@ function updateCoupleSettlementMath() {
   const netDue = paidByMe - half;
 
   const headerText = document.getElementById('header-couple-text');
-  if (totalShared === 0) {
-    headerText.textContent = 'Acerto: R$ 0,00';
-  } else if (Math.abs(netDue) < 0.01) {
-    headerText.textContent = 'Casal: Quitado!';
-  } else if (netDue > 0) {
-    headerText.textContent = `Receber: ${fmtCurrency(netDue)}`;
-  } else {
-    headerText.textContent = `Pagar: ${fmtCurrency(Math.abs(netDue))}`;
+  if (headerText) {
+    if (totalShared === 0) {
+      headerText.textContent = 'Acerto: R$ 0,00';
+    } else if (Math.abs(netDue) < 0.01) {
+      headerText.textContent = 'Casal: Quitado!';
+    } else if (netDue > 0) {
+      headerText.textContent = `Receber: ${fmtCurrency(netDue)}`;
+    } else {
+      headerText.textContent = `Pagar: ${fmtCurrency(Math.abs(netDue))}`;
+    }
   }
 
-  document.getElementById('couple-total-shared').textContent = fmtCurrency(totalShared);
-  document.getElementById('couple-paid-me').textContent = fmtCurrency(paidByMe);
-  document.getElementById('couple-paid-gf').textContent = fmtCurrency(paidByGf);
+  const el = (id) => document.getElementById(id);
+  if (el('couple-total-shared')) el('couple-total-shared').textContent = fmtCurrency(totalShared);
+  if (el('couple-paid-me')) el('couple-paid-me').textContent = fmtCurrency(paidByMe);
+  if (el('couple-paid-gf')) el('couple-paid-gf').textContent = fmtCurrency(paidByGf);
 
-  const verdictMsg = document.getElementById('couple-verdict-msg');
-  if (totalShared === 0) {
-    verdictMsg.textContent = 'Sem gastos divididos cadastrados';
-  } else if (Math.abs(netDue) < 0.01) {
-    verdictMsg.textContent = 'Contas 100% equilibradas!';
-  } else if (netDue > 0) {
-    verdictMsg.textContent = `Rodrega deve acertar ${fmtCurrency(netDue)} com você`;
-  } else {
-    verdictMsg.textContent = `Você deve acertar ${fmtCurrency(Math.abs(netDue))} com Rodrego`;
+  const verdictMsg = el('couple-verdict-msg');
+  if (verdictMsg) {
+    if (totalShared === 0) {
+      verdictMsg.textContent = 'Sem gastos divididos cadastrados';
+    } else if (Math.abs(netDue) < 0.01) {
+      verdictMsg.textContent = 'Contas 100% equilibradas!';
+    } else if (netDue > 0) {
+      verdictMsg.textContent = `Rodrega deve acertar ${fmtCurrency(netDue)} com você`;
+    } else {
+      verdictMsg.textContent = `Você deve acertar ${fmtCurrency(Math.abs(netDue))} com Rodrego`;
+    }
   }
 
-  const listContainer = document.getElementById('couple-shared-items-list');
-  if (sharedList.length === 0) {
-    listContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">Nenhum item marcado como compartilhado.</p>';
-  } else {
-    listContainer.innerHTML = sharedList.map(i => `
-      <div class="couple-item-line">
-        <div>
-          <strong>${i.name}</strong>
-          <small style="color: var(--text-muted); margin-left: 0.4rem;">
-            (Pago por: ${i.payer === 'me' ? 'Você' : 'Rodrega'})
-          </small>
-        </div>
-        <strong>${fmtCurrency(i.realizado)}</strong>
-      </div>
-    `).join('');
+  if (renderList) {
+    const listContainer = el('couple-shared-items-list');
+    if (listContainer) {
+      if (sharedList.length === 0) {
+        listContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">Nenhum item marcado como compartilhado.</p>';
+      } else {
+        listContainer.innerHTML = sharedList.map(i => `
+          <div class="couple-item-line">
+            <div>
+              <strong>${i.name}</strong>
+              <small style="color: var(--text-muted); margin-left: 0.4rem;">
+                (Pago por: ${i.payer === 'me' ? 'Você' : 'Rodrega'})
+              </small>
+            </div>
+            <strong>${fmtCurrency(i.realizado)}</strong>
+          </div>
+        `).join('');
+      }
+    }
   }
+}
+
+function openCoupleModal() {
+  updateCoupleSettlementMath(true);
+  document.getElementById('modal-couple').classList.add('open');
 }
 
 // --- MODAL DE METAS ---
